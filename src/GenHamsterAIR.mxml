@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   height="710" minWidth="955" minHeight="600" 
+			   creationComplete="initApp()">
+	
+	<fx:Script>
+		<![CDATA[
+			
+			import mx.collections.XMLListCollection;
+			import mx.controls.Alert;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.ArrayUtil;
+			
+			[Bindable] private var omimListe:XMLListCollection;
+			[Bindable] private var omimL:XML;
+			[Bindable] private var hpoString:String; 
+			[Bindable] private var gtString:String; 
+			
+			private var hpoResult:Array; 
+			private var hpoSuchExp:RegExp;
+			private var gtResult:Array;
+			private var gtSuchExp:RegExp;
+			
+			private function initApp():void {
+				hpoEinlesen();
+				gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/I/IA1_report.txt");
+			}
+			
+			private function ladeXML(path:String, naechsteFunktion:Function):void
+			{
+				var loader:URLLoader = new URLLoader();
+				var req:URLRequest = new URLRequest(path);
+				loader.addEventListener(Event.COMPLETE, naechsteFunktion);
+				try { 
+					loader.load(req); 
+				} catch (error:ArgumentError){ 
+					Alert.show("Es ist ein Fehler aufgetreten (ArgumentError)!"); 
+				} catch (error:SecurityError){ 
+					Alert.show("Es ist ein Fehler aufgetreten (SecurityError)!"); 
+				}   
+			}
+			
+			private function omimListeGeladen(evt:Event):void
+			{
+				omimL = new XML(evt.target.data);
+				omimListe = new XMLListCollection(omimL.child("*"));
+			}
+			
+			private function treeLabel(item:Object):String { 
+				var node:XML = XML(item);
+				return node.toString();
+			}
+			
+			private function omimSuche():void {
+				var params:Object = { 
+					db: "omim",
+					term: suchTextInput.text
+				};
+				omimService.send(params);
+			}
+			
+			private function omimSummarySuche(omimnr:int):void {
+				ladeXML("http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=omim&id=" + omimnr, omimListeGeladen);
+			}
+			
+			private function hpoSuche():void {
+				if (hpoSuchButton.label == "Suche in HPO") {		//erste Suche?
+					hpoSuchButton.label = "Weitersuchen"; 
+					hpoSuchExp = new RegExp(hpoSuchTextInput.text, "gi");
+				}
+				hpoResult = hpoSuchExp.exec(hpoString);				
+				if (hpoResult != null) 
+				{ 
+					hpoTextArea.setFocus();
+					hpoTextArea.selectRange(hpoSuchExp.lastIndex - hpoSuchTextInput.text.length, hpoSuchExp.lastIndex);
+					hpoTextArea.scrollToRange(hpoSuchExp.lastIndex + 500, hpoSuchExp.lastIndex + 500);
+					hpoTextArea.setFocus();
+				}
+				else {Alert.show("Ende der HPO erreicht. Kein weiteres Vorkommen von '" + hpoSuchTextInput.text + "' mehr.")}
+			}	
+			
+			private function gtSuche():void {
+				
+				if (gtSuchButton.label == "Suche in GT") {		//erste Suche?
+					gtSuchButton.label = "Weitersuchen"; 
+					gtSuchExp = new RegExp(gtSuchTextInput.text, "gi");
+				}
+				gtResult = gtSuchExp.exec(gtString);				
+				if (gtResult != null) 
+				{ 
+					gtTextArea.setFocus();
+					gtTextArea.selectRange(gtSuchExp.lastIndex - gtSuchTextInput.text.length, gtSuchExp.lastIndex);
+					gtTextArea.scrollToRange(gtSuchExp.lastIndex + 500, gtSuchExp.lastIndex + 500);
+					gtTextArea.setFocus();
+				} 
+				else {Alert.show("Ende von GeneTests erreicht. Kein weiteres Vorkommen von '" + gtSuchTextInput.text + "' mehr.")}
+			}	
+			
+			private function hpoEinlesen(): void
+			{
+				var request:URLRequest = new URLRequest("http://compbio.charite.de/svn/hpo/trunk/src/annotation/genes_to_phenotype.txt");
+				var loader:URLLoader = new URLLoader();
+				loader.addEventListener(Event.COMPLETE, hpoCompleteHandler);
+				try
+				{
+					loader.load(request);
+				}
+				catch (error:ArgumentError)
+				{
+					Alert.show("Es ist ein Fehler aufgetreten (ArgumentError)!"); 
+				}
+				catch (error:SecurityError)
+				{
+					Alert.show("Es ist ein Fehler aufgetreten (SecurityError)!"); 
+				}
+			}
+			
+			private function gtEinlesen(gtPfad:String): void
+			{
+				var request:URLRequest = new URLRequest(gtPfad);
+				var loader:URLLoader = new URLLoader();
+				loader.addEventListener(Event.COMPLETE, gtCompleteHandler);
+				try
+				{
+					loader.load(request);
+				}
+				catch (error:ArgumentError)
+				{
+					Alert.show("Ein ArgumentError ist aufgetreten!");
+				}
+				catch (error:SecurityError)
+				{
+					Alert.show("Ein SecurityError ist aufgetreten!");
+				}
+			}
+			
+			private function gtOptionengeaendert(): void
+			{
+				if(alleTestsRadio.selected && ueberallTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/I/IA1_report.txt");					
+				}
+				else if(alleTestsRadio.selected && usaTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/I/IB1_report.txt");					
+				}
+				else if(alleTestsRadio.selected && nichtusaTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/I/IC1_report.txt");					
+				}
+					
+				else if(praenatalTestsRadio.selected && ueberallTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/V/VA1_report.txt");					
+				}
+				else if(praenatalTestsRadio.selected && usaTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/V/VB2a_report.txt");					
+				}
+				else if(praenatalTestsRadio.selected && nichtusaTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/V/VC2a_report.txt");					
+				}
+					
+				else if(wissTestsRadio.selected && ueberallTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/VI/VIA_report.txt");					
+				}
+				else if(wissTestsRadio.selected && usaTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/VI/VIB_report.txt");					
+				}
+				else if(wissTestsRadio.selected && nichtusaTestsRadio.selected) {
+					gtEinlesen("ftp://ftp.ncbi.nih.gov/pub/GeneTests/reports/VI/VIC_report.txt");					
+				}
+			}
+			
+			private function hpoCompleteHandler(event:Event):void
+			{
+				hpoString = event.target.data;
+				var hilfsArray:Array = hpoString.split("\t");
+				hpoString = hilfsArray.join("\n\n");	
+				var hilfsArray2:Array = hpoString.split(";");
+				hpoString = hilfsArray2.join("\n");			
+			}
+			
+			private function gtCompleteHandler(event:Event):void
+			{
+				gtString = event.target.data;
+				var hilfsArray:Array = gtString.split("\t");
+				gtString = hilfsArray.join("  ---  ");	
+				var hilfsArray2:Array = gtString.split(";");
+				gtString = hilfsArray2.join("\n");	
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<s:HTTPService id="omimService" 
+					   url="http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+					   showBusyCursor="true"/>
+		<s:RadioButtonGroup id="testArtGroup"/>
+		<s:RadioButtonGroup id="testOrtGroup"/>
+	</fx:Declarations>
+	
+	<s:states> 
+		<s:State name="default"/> 
+		<s:State name="advanced"/> 
+	</s:states>
+	<s:TabBar dataProvider="{hamsterStack}" />
+	<mx:ViewStack id="hamsterStack"
+				  width="1072" height="952">
+		<s:NavigatorContent id="sucheNav" label="Suche"
+							fontWeight="bold">
+			<s:Panel x="40" y="40" width="756" height="190" fontSize="18" fontWeight="bold"
+					 title="GenHamster">
+				<s:TextInput id="suchTextInput" width="315" enter="omimSuche()"
+							 x="135" y="31"/>
+				<s:Label id="stichwortLabel" fontSize="18" fontWeight="bold"
+						 text="Stichwort:"
+						 x="14" y="36"/>
+				<s:Button id="suchenButton" x="530" y="31" width="181" height="99"
+						  label="Suche starten" click="omimSuche()" fontSize="18" fontWeight="bold"
+						  iconPlacement="top"
+						  icon="@Embed('assets/Hamster.jpg')"/>
+				
+			</s:Panel>		
+			<s:Panel id="omimPanel" x="40" y="238" width="756" height="300"
+					 title="{omimService.lastResult.eSearchResult.Count} Ergebnisse">	
+				<s:List id="omimList" width="192" height="230"
+						click="omimSummarySuche(omimList.selectedItem)"
+						dataProvider="{omimService.lastResult.eSearchResult.IdList.Id}"
+						x="10" y="10">
+				</s:List>
+				<mx:Tree id="omimTree" x="210" y="9" width="502" height="230"
+						 allowMultipleSelection="false" dataProvider="{omimListe}"
+						 labelFunction="treeLabel" showRoot="false"
+						 ></mx:Tree>
+				
+			</s:Panel>
+			
+		</s:NavigatorContent>
+		<s:NavigatorContent id="hpoNav" label="HPO">
+			<s:Panel id="hpoPanel" x="40" y="40" width="474" height="583"
+					 title="Human Phenotype Ontology">
+				<s:TextArea id="hpoTextArea" x="10" y="40" width="452" height="500"
+							text="{hpoString}"
+							fontFamily="Courier New"/>
+				<s:TextInput id="hpoSuchTextInput" x="10" y="10" width="346" enter="hpoSuche()"
+							 text="{omimListe.child('Item').(@Name == 'Title')}"
+							 change="hpoSuchButton.label=&quot;Suche in HPO&quot;"/>
+				<s:Button id="hpoSuchButton" x="364" y="11" label="Suche in HPO" click="hpoSuche()"/>
+			</s:Panel>
+		</s:NavigatorContent>
+		<s:NavigatorContent id="gtNav" width="100%" height="100%" label="GeneTests">
+			<s:Panel id="geneTestsPanel" x="40" y="40" width="474" height="583"
+					 title="GeneTests">
+				<s:TextArea id="gtTextArea" x="10" y.advanced="146" y.default="70" width="452" 
+							height.advanced="394" height.default="470"
+							text="{gtString}"
+							fontFamily="Courier New"/>
+				<s:TextInput id="gtSuchTextInput" x="10" y="10" width="346"
+							 text="{omimListe.child('Item').(@Name == 'Title')}"
+							 enter="gtSuche()" change="hpoSuchButton.label=&quot;Suche in GT&quot;"
+							 />
+				<s:Button id="gtSuchButton" x="364" y="11" width="98" label="Suche in GT"
+						  click="gtSuche()"/>
+				<s:ToggleButton x="10" y="40" label="GeneTests-Optionen"
+								click.default="currentState='advanced';"
+								click.advanced="currentState='default';"/>
+				<s:RadioButton id="alleTestsRadio" includeIn="advanced" x="10" y="76"
+							   label="Alle Tests" click="gtOptionengeaendert();"
+							   group="{testArtGroup}" selected="true"/>
+				<s:RadioButton id="praenatalTestsRadio" includeIn="advanced" x="10" y="98"
+							   label="Pränatale Tests" click="gtOptionengeaendert();"
+							   group="{testArtGroup}"/>
+				<s:RadioButton id="wissTestsRadio" includeIn="advanced" x="10" y="120"
+							   label="Wissenschaftliche Tests" click="gtOptionengeaendert();"
+							   group="{testArtGroup}"/>	
+				
+				<s:RadioButton id="ueberallTestsRadio" includeIn="advanced" x="300" y="76"
+							   label="Alle Labore" click="gtOptionengeaendert();"
+							   group="{testOrtGroup}" selected="true"/>
+				<s:RadioButton id="usaTestsRadio" includeIn="advanced" x="300" y="98" label="Nur USA"
+							   click="gtOptionengeaendert();" group="{testOrtGroup}"/>
+				<s:RadioButton id="nichtusaTestsRadio" includeIn="advanced" x="300" y="120"
+							   label="Nur außerhalb der USA" click="gtOptionengeaendert();"
+							   group="{testOrtGroup}"/>	
+				
+			</s:Panel>
+			
+		</s:NavigatorContent>
+		
+		
+		<s:NavigatorContent id="hilfeNav" label="Hilfe">
+			<s:Panel id="hilfePanel" x="40" y="40" width="474" height="307" title="Hilfe">
+				<s:RichText x="11" y="14" width="451" height="68"
+							text="Bitte geben Sie im Feld 'Stichwort' ein Suchwort (Gen-Bezeichnung oder Teil davon) ein (Beispiel: FMR1, NIPBL) und starten Sie die Suche mit einem Klick auf den entsprechenden Button. Es werden dann die zugehörigen OMIM-Nummern aufgelistet. Mit einem Klick auf die OMIM-Nummer können Sie Details zu diesem Gen bzw. zu der Erkrankung anzeigen lassen."
+							/>
+				<s:RichText x="11" width="451" y="96"
+							text="Das markierte Gen wird (mit alternativen Bezeichnungen) automatisch in das Suchfeld im Tab 'HPO' übernommen. Sie können es dort modifizieren und anschließend in der Human Phenotype Ontology (HPO) danach suchen. Die HPO listet die phänotypischen Auffälligkeiten auf, die mit einer Veränderung des Gens beim Menschen einhergehen."
+							/>
+				<s:RichText x="11" y="182" width="451" height="90"
+							text="Gleichzeitig wird das markierte Gen automatisch in das Suchfeld im Tab 'GeneTests' übernommen. Dort kann nach dem gleichen Prinzip wie in der HPO gesucht werden. Angezeigt wird jeweils die Anzahl der Labore, die den Test anbieten. Zusätzlich kann mit Hilfe des Optionen-Buttons eingegrenzt werden, ob nur Labore angezeigt werden sollen, die pränatale bzw. wissenschaftliche Tests anbieten, bzw. innerhalb oder außerhalb der USA liegen."/>
+			</s:Panel>
+			<s:Panel id="quellenPanel" x="40" y="355" width="474" height="143"
+					 title="Quellen">
+				<s:RichText x="11" y="14" width="451" height="44"
+							text="OMIM: http://www.ncbi.nlm.nih.gov/omim  -  Zugriff mit Hilfe von ESearch und ESummary, Entrez Programming Utilities (http://www.ncbi.nlm.nih.gov/books/NBK25501)"/>
+				<s:RichText x="10" y="66" width="451" height="14"
+							text="HPO: http://www.human-phenotype-ontology.org"/>
+				<s:RichText x="10" y="88" width="451" height="14"
+							text="GeneTests: http://www.ncbi.nlm.nih.gov/sites/GeneTests"/>
+				
+			</s:Panel>
+			<s:Panel id="infoPanel" x="40" y="506" width="474" height="117" title="Info">
+				<s:RichText x="11" y="14" width="451" height="15"
+							text="GenHamster, Version 1.0: (c) 2011 - 2012 Dr. med. Christina Czeschik"/>
+				<s:RichText x="10" y="37" width="451"
+							text="Projektarbeit, Studiengang Medizinische Informatik, Beuth-Hochschule Berlin"/>
+				<s:RichText x="11" y="61" width="451"
+							text="Betreuung: Prof. Dr. Targo Pavlista, Fachbereich VI"/>
+				
+			</s:Panel>
+		</s:NavigatorContent>
+		
+		
+	</mx:ViewStack>
+	
+	
+</s:WindowedApplication>
